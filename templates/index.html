@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ProductTriage AI</title>
+  <meta name="description" content="AI-assisted product issue triage for product owners.">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">
+      <span class="brand-mark">PT</span>
+      <span>
+        <strong>ProductTriage AI</strong>
+        <small>AI-assisted product operations</small>
+      </span>
+    </a>
+    <div class="mode-wrap">
+      <span id="mode-dot" class="mode-dot"></span>
+      <span id="mode-label">Checking AI mode...</span>
+    </div>
+  </header>
+
+  <main class="shell">
+    <section class="hero">
+      <p class="eyebrow">PRODUCT OWNER WORKFLOW</p>
+      <h1>Turn raw product issues into <span>structured decisions.</span></h1>
+      <p class="hero-copy">
+        ProductTriage AI analyzes incoming software issues and recommends priority,
+        ownership, impact, labels, acceptance criteria, and the next product action.
+      </p>
+    </section>
+
+    <section class="workspace">
+      <article class="panel intake-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="step">01 / ISSUE INTAKE</p>
+            <h2>Describe the problem</h2>
+          </div>
+          <button type="button" class="secondary small" id="sample-button">Load sample</button>
+        </div>
+
+        <form id="triage-form">
+          <label>
+            Issue title
+            <input id="title" maxlength="140" placeholder="e.g. Portfolio balance updates slowly after a trade" required>
+          </label>
+
+          <label>
+            Description
+            <textarea id="description" rows="6" placeholder="Describe what users experience, when it happens, and any evidence you have." required></textarea>
+          </label>
+
+          <div class="two-col">
+            <label>
+              Customer impact
+              <select id="customer-impact" required>
+                <option value="">Select impact</option>
+                <option>Blocks core task</option>
+                <option>Major degradation</option>
+                <option>Minor inconvenience</option>
+                <option>Unknown</option>
+              </select>
+            </label>
+
+            <label>
+              Frequency
+              <select id="frequency" required>
+                <option value="">Select frequency</option>
+                <option>Always</option>
+                <option>Often</option>
+                <option>Sometimes</option>
+                <option>Rare</option>
+                <option>Unknown</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="two-col">
+            <label>
+              Platform
+              <input id="platform" placeholder="Web, iOS, Android, API..." required>
+            </label>
+
+            <label>
+              Source
+              <select id="source" required>
+                <option>Customer report</option>
+                <option>Support ticket</option>
+                <option>Internal QA</option>
+                <option>Product analytics</option>
+                <option>Engineering</option>
+                <option>Other</option>
+              </select>
+            </label>
+          </div>
+
+          <button class="primary" id="analyze-button" type="submit">Analyze issue</button>
+          <p id="form-message" class="form-message" aria-live="polite"></p>
+        </form>
+      </article>
+
+      <article class="panel result-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="step">02 / AI TRIAGE</p>
+            <h2>Recommendation</h2>
+          </div>
+          <span id="confidence-chip" class="confidence-chip hidden"></span>
+        </div>
+
+        <div id="empty-result" class="empty-result">
+          <div class="empty-icon">◎</div>
+          <strong>No analysis yet</strong>
+          <p>Submit a product issue to generate a structured triage recommendation.</p>
+        </div>
+
+        <div id="result-content" class="hidden">
+          <div class="decision-row">
+            <div><span class="metric-label">Priority</span><strong id="result-priority" class="priority-badge">—</strong></div>
+            <div><span class="metric-label">Impact</span><strong id="result-impact">—</strong></div>
+            <div><span class="metric-label">Owner</span><strong id="result-owner">—</strong></div>
+            <div><span class="metric-label">Category</span><strong id="result-category">—</strong></div>
+          </div>
+
+          <div class="result-section"><h3>Executive summary</h3><p id="result-summary"></p></div>
+          <div class="result-section"><h3>Why this priority</h3><p id="result-rationale"></p></div>
+          <div class="result-section action-section"><h3>Recommended next action</h3><p id="result-action"></p></div>
+          <div class="result-section"><h3>Suggested labels</h3><div id="result-labels" class="tags"></div></div>
+          <div class="result-section"><h3>Acceptance criteria</h3><ul id="result-criteria"></ul></div>
+          <div class="result-section" id="questions-section"><h3>Questions before committing scope</h3><ul id="result-questions"></ul></div>
+        </div>
+      </article>
+    </section>
+
+    <section class="history-section">
+      <div class="section-heading">
+        <div><p class="step">03 / DECISION HISTORY</p><h2>Recent triage runs</h2></div>
+        <p>Stored in SQLite for review and product decision traceability.</p>
+      </div>
+      <div id="history-list" class="history-list"></div>
+    </section>
+
+    <section class="architecture">
+      <div class="section-heading">
+        <div><p class="step">HOW IT WORKS</p><h2>Simple, explainable architecture</h2></div>
+      </div>
+      <div class="flow">
+        <div><strong>Browser</strong><span>Issue intake</span></div><b>→</b>
+        <div><strong>Flask API</strong><span>Validation</span></div><b>→</b>
+        <div><strong>AI Engine</strong><span>Structured triage</span></div><b>→</b>
+        <div><strong>SQLite</strong><span>Decision history</span></div>
+      </div>
+    </section>
+  </main>
+
+  <footer>ProductTriage AI · Built as a product + AI portfolio project</footer>
+
+  <script>
+    const form = document.getElementById("triage-form");
+    const analyzeButton = document.getElementById("analyze-button");
+    const formMessage = document.getElementById("form-message");
+
+    async function api(url, options = {}) {
+      const response = await fetch(url, {
+        headers: {"Content-Type": "application/json", ...(options.headers || {})},
+        ...options
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Request failed.");
+      return data;
+    }
+
+    async function loadMode() {
+      try {
+        const health = await api("/api/health");
+        const label = document.getElementById("mode-label");
+        const dot = document.getElementById("mode-dot");
+        if (health.ai_mode === "openai") {
+          label.textContent = `OpenAI mode · ${health.model}`;
+          dot.classList.add("live");
+        } else {
+          label.textContent = "Demo mode · add API key for live AI";
+          dot.classList.add("demo");
+        }
+      } catch (_) {
+        document.getElementById("mode-label").textContent = "Mode unavailable";
+      }
+    }
+
+    document.getElementById("sample-button").addEventListener("click", () => {
+      document.getElementById("title").value = "Portfolio balances take several seconds to refresh after a trade";
+      document.getElementById("description").value = "Multiple customers report that after placing a trade, the portfolio page can show the old balance for 8–12 seconds. The order itself completes successfully, but the stale value creates uncertainty and some users refresh repeatedly.";
+      document.getElementById("customer-impact").value = "Major degradation";
+      document.getElementById("frequency").value = "Often";
+      document.getElementById("platform").value = "Web";
+      document.getElementById("source").value = "Customer report";
+    });
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      formMessage.textContent = "";
+      analyzeButton.disabled = true;
+      analyzeButton.textContent = "Analyzing...";
+      const payload = {
+        title: document.getElementById("title").value,
+        description: document.getElementById("description").value,
+        customer_impact: document.getElementById("customer-impact").value,
+        frequency: document.getElementById("frequency").value,
+        platform: document.getElementById("platform").value,
+        source: document.getElementById("source").value
+      };
+      try {
+        const result = await api("/api/triage", {method: "POST", body: JSON.stringify(payload)});
+        renderResult(result);
+        await loadHistory();
+      } catch (error) {
+        formMessage.textContent = error.message;
+      } finally {
+        analyzeButton.disabled = false;
+        analyzeButton.textContent = "Analyze issue";
+      }
+    });
+
+    function renderResult(result) {
+      document.getElementById("empty-result").classList.add("hidden");
+      document.getElementById("result-content").classList.remove("hidden");
+      const chip = document.getElementById("confidence-chip");
+      chip.classList.remove("hidden");
+      chip.textContent = `${result.confidence}% confidence`;
+      const priority = document.getElementById("result-priority");
+      priority.textContent = result.priority;
+      priority.className = `priority-badge ${result.priority.toLowerCase()}`;
+      document.getElementById("result-impact").textContent = result.impact_level;
+      document.getElementById("result-owner").textContent = result.owner_team;
+      document.getElementById("result-category").textContent = result.category;
+      document.getElementById("result-summary").textContent = result.summary;
+      document.getElementById("result-rationale").textContent = result.rationale;
+      document.getElementById("result-action").textContent = result.next_action;
+      document.getElementById("result-labels").innerHTML = result.labels.map(label => `<span class="tag">${escapeHtml(label)}</span>`).join("");
+      document.getElementById("result-criteria").innerHTML = result.acceptance_criteria.map(item => `<li>${escapeHtml(item)}</li>`).join("");
+      const questionsSection = document.getElementById("questions-section");
+      if (result.follow_up_questions.length) {
+        questionsSection.classList.remove("hidden");
+        document.getElementById("result-questions").innerHTML = result.follow_up_questions.map(item => `<li>${escapeHtml(item)}</li>`).join("");
+      } else {
+        questionsSection.classList.add("hidden");
+      }
+      document.querySelector(".result-panel").scrollIntoView({behavior: "smooth", block: "start"});
+    }
+
+    async function loadHistory() {
+      const history = await api("/api/triage?limit=6");
+      const container = document.getElementById("history-list");
+      if (!history.length) {
+        container.innerHTML = `<div class="history-empty">No triage decisions saved yet.</div>`;
+        return;
+      }
+      container.innerHTML = history.map(item => `
+        <article class="history-card">
+          <div class="history-top"><span class="priority-mini ${item.priority.toLowerCase()}">${item.priority}</span><span>${item.confidence}%</span></div>
+          <strong>${escapeHtml(item.title)}</strong>
+          <p>${escapeHtml(item.summary)}</p>
+          <div class="history-bottom"><span>${escapeHtml(item.category)}</span><span>${escapeHtml(item.owner_team)}</span><span>${item.mode === "openai" ? "AI" : "Demo"}</span></div>
+        </article>
+      `).join("");
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, char => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;"})[char]);
+    }
+
+    loadMode();
+    loadHistory();
+  </script>
+</body>
+</html>
